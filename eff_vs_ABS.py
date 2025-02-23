@@ -53,20 +53,33 @@ def extract_fit_parameters(fits):
         WP.append(HV50[-1] - math.log(1 / 0.95 - 1) / Lambda[-1] + 150.)
     return Emax, Lambda, HV50, HV95, WP
 
-def create_ABS_graph(Emax, csv_files):
-    ABS = []
-    for item in csv_files:
+def create_ABS_graph(Emax_2024, Emax_2023, csv_files_2024, csv_files_2023):
+    ABS_2024, ABS_2023 = [], []
+
+    for item in csv_files_2024:
         try:
             value = item.split("/")[-1].split("_", 1)[1].replace(".csv", "")
-            ABS.append(25 if value == "OFF" else float(value))
+            ABS_2024.append(25 if value == "OFF" else float(value))
         except (IndexError, ValueError):
-            ABS.append(0)
+            ABS_2024.append(0)
 
-    gr2 = ROOT.TGraph(len(ABS))
-    for i, (x, y) in enumerate(zip(ABS, Emax)):
-        gr2.SetPoint(i, x, y)  
-    
-    return gr2
+    for item in csv_files_2023:
+        try:
+            value = item.split("/")[-1].split("_", 1)[1].replace(".csv", "")
+            ABS_2023.append(25 if value == "OFF" else float(value))
+        except (IndexError, ValueError):
+            ABS_2023.append(0)
+
+    gr_2024 = ROOT.TGraph(len(ABS_2024))
+    gr_2023 = ROOT.TGraph(len(ABS_2023))
+
+    for i, (x, y) in enumerate(zip(ABS_2024, Emax_2024)):
+        gr_2024.SetPoint(i, x, y)
+
+    for i, (x, y) in enumerate(zip(ABS_2023, Emax_2023)):
+        gr_2023.SetPoint(i, x, y)
+
+    return gr_2024, gr_2023
 
 def process_files(csv_files, file_offset=0):
     graphs, fits = [], []
@@ -78,15 +91,24 @@ def process_files(csv_files, file_offset=0):
         fits.append(sigmoid)
     return graphs, fits
 
-def plot_results(graphs, fits, gr2):
-   
+def plot_results(gr_2024, gr_2023):
     c2 = ROOT.TCanvas("c2", "Emax vs ABS", 800, 600)
-    
-    gr2.SetMarkerStyle(21)
-    gr2.SetMarkerColor(ROOT.kBlue)
-    gr2.GetXaxis().SetTitle("ABS")
-    gr2.GetYaxis().SetTitle("Efficiency")
-    gr2.Draw("AP")
+
+    gr_2024.SetMarkerStyle(21)
+    gr_2024.SetMarkerColor(ROOT.kBlue)
+    gr_2024.GetXaxis().SetTitle("ABS")
+    gr_2024.GetYaxis().SetTitle("Efficiency")
+
+    gr_2023.SetMarkerStyle(22)
+    gr_2023.SetMarkerColor(ROOT.kRed)
+
+    gr_2024.Draw("AP")
+    gr_2023.Draw("P same")
+
+    legend = ROOT.TLegend(0.7, 0.2, 0.9, 0.3)
+    legend.AddEntry(gr_2024, "2024", "p")
+    legend.AddEntry(gr_2023, "2023", "p")
+    legend.Draw()
 
     c2.Draw()
     c2.SaveAs("ABS_vs_EFF.png")
@@ -95,27 +117,17 @@ def main():
     data_folder_1 = "data_2024"
     data_folder_2 = "data_2023" 
     
-    num_periods = int(input("Quantos períodos deseja analisar? "))
-    period_files = []
+    csv_files_2024 = get_files(data_folder_1, 2024)
+    csv_files_2023 = get_files(data_folder_2, 2023)
     
-    csv_files_1 = get_files(data_folder_1, 2024)
-    csv_files_2 = get_files(data_folder_2, 2023)
-    period_files.append((csv_files_1, csv_files_2))
+    graphs_2024, fits_2024 = process_files(csv_files_2024)    
+    graphs_2023, fits_2023 = process_files(csv_files_2023, file_offset=len(csv_files_2024))
     
-    graphs, fits = [], []
-    
-    for period_idx, (csv_files_1, csv_files_2) in enumerate(period_files):
-        print(f"Analisando arquivos do período {period_idx + 1}:")
-        g1, f1 = process_files(csv_files_1, file_offset=0)
-        g2, f2 = process_files(csv_files_2, file_offset=len(csv_files_1))
-        
-        graphs.extend(g1 + g2)
-        fits.extend(f1 + f2)
+    Emax_2024, _, _, _, _ = extract_fit_parameters(fits_2024)
+    Emax_2023, _, _, _, _ = extract_fit_parameters(fits_2023)
+    gr_2024, gr_2023 = create_ABS_graph(Emax_2024, Emax_2023, csv_files_2024, csv_files_2023)
+    plot_results(gr_2024, gr_2023)
 
-    Emax, _, _, _, _ = extract_fit_parameters(fits)
-    gr2 = create_ABS_graph(Emax, csv_files_1 + csv_files_2)
-
-    plot_results(graphs, fits, gr2)
     print("Processamento concluído.")
 
 if __name__ == "__main__":
