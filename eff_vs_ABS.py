@@ -5,7 +5,7 @@ import math
 from ROOT import TLine, TLegend
 import numpy as np
 
-HV_ref = 0.95  # Definição do HV de referência para HV95
+HV_ref = 95  
 colors = [ROOT.kBlue, ROOT.kRed, ROOT.kGreen+2, ROOT.kMagenta, ROOT.kOrange, ROOT.kCyan, ROOT.kBlack]
 markers = [20, 21, 22, 23, 24, 25, 26]
 
@@ -28,7 +28,7 @@ def create_eff_graph(df, index):
     gr = ROOT.TGraphErrors(len(df),
                            np.array(df['HV_top'].values, dtype=float), 
                            np.array(df['efficiency'].values, dtype=float),
-                           np.zeros(len(df), dtype=float),  # Erro em X (substitui None)
+                           ROOT.nullptr, 
                            np.array(df['eff_error'].values, dtype=float))
     gr.SetMarkerStyle(markers[index % len(markers)])
     gr.SetMarkerColor(colors[index % len(colors)])
@@ -64,7 +64,7 @@ def create_ABS_graph(Emax, csv_files):
 
     gr2 = ROOT.TGraph(len(ABS))
     for i, (x, y) in enumerate(zip(ABS, Emax)):
-        gr2.SetPoint(i, x, y)  # Corrigido: `gr2` em vez de `gr`
+        gr2.SetPoint(i, x, y)  
     
     return gr2
 
@@ -79,34 +79,13 @@ def process_files(csv_files, file_offset=0):
     return graphs, fits
 
 def plot_results(graphs, fits, gr2):
-    c1 = ROOT.TCanvas("c1", "Efficiency vs ABS", 800, 600)
-    c1.SetGrid()
-
-    legend = ROOT.TLegend(0.15, 0.15, 0.45, 0.35)
-    legend.SetHeader("Efficiency Curves", "C")
-
-    first_graph = True
-    for i, (graph, fit) in enumerate(zip(graphs, fits)):
-        if first_graph:
-            graph.SetTitle("Efficiency vs HV; HV (V); Efficiency")
-            graph.Draw("AP")
-            first_graph = False
-        else:
-            graph.Draw("P SAME")
-        fit.Draw("SAME")
-        legend.AddEntry(graph, f"Dataset {i+1}", "p")
-
-    legend.Draw()
-    c1.Draw()
-    c1.SaveAs("Efficiency_vs_HV.png")
-
-    # Criando segundo gráfico
+   
     c2 = ROOT.TCanvas("c2", "Emax vs ABS", 800, 600)
-    c2.SetGrid()
     
-    gr2.SetTitle("Emax vs ABS; ABS (units); Emax")
     gr2.SetMarkerStyle(21)
     gr2.SetMarkerColor(ROOT.kBlue)
+    gr2.GetXaxis().SetTitle("ABS")
+    gr2.GetYaxis().SetTitle("Efficiency")
     gr2.Draw("AP")
 
     c2.Draw()
@@ -114,7 +93,7 @@ def plot_results(graphs, fits, gr2):
 
 def main():
     data_folder_1 = "data_2024"
-    data_folder_2 = "data_2024" 
+    data_folder_2 = "data_2023" 
     
     num_periods = int(input("Quantos períodos deseja analisar? "))
     period_files = []
