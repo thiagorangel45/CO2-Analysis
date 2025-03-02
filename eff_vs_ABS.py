@@ -127,7 +127,7 @@ def plot_ABS_vs_Emax(Emax_2024, Emax_2023, ABS_2024, ABS_2023):
     gr_2023_30CO205SF6.SetMarkerColor(ROOT.kBlue)
     gr_2023_30CO205SF6.SetMarkerSize(1.2)
     
-    gr_2023_40CO2.SetMarkerStyle()
+    gr_2023_40CO2.SetMarkerStyle(32)
     gr_2023_40CO2.SetMarkerColor(ROOT.kGreen+2)
     gr_2023_40CO2.SetMarkerSize(1.2)
     

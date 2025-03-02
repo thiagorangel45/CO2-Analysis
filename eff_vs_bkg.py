@@ -1,31 +1,36 @@
-import ROOT
-import pandas as pd
 import os
-import math
-from ROOT import TLine, TLegend
+import pandas as pd
 import numpy as np
+import ROOT
+import math
 
-HV_ref = 95  
-colors = [ROOT.kBlue, ROOT.kRed, ROOT.kGreen+2, ROOT.kMagenta, ROOT.kOrange, ROOT.kCyan, ROOT.kBlack]
-markers = [20, 21, 22, 23, 24, 25, 26]
-
+markers = [20, 21, 22, 23, 24]  
+colors = [ROOT.kBlue, ROOT.kRed, ROOT.kGreen+2, ROOT.kMagenta, ROOT.kOrange+7]
 
 def get_files(data_folder, year):
-    num_files = int(input(f"Quantos arquivos deseja analisar para o ano {year}? "))
-    csv_files = []
-    csv_WP_files = []
+    mixtures = ['STDMX', '30CO2', '30CO205SF6', '40CO2']
+    csv_files = {mixture: [] for mixture in mixtures}
+    csv_WP_files = {mixture: [] for mixture in mixtures}
     
-    for j in range(num_files):
-        file_name = input(f"Digite o nome do arquivo {j+1} do ano {year} (ex: STDMX.csv): ")
-        full_path = os.path.join(data_folder, file_name)
+    for mixture in mixtures:
+        try:
+            num_files = int(input(f"Quantos arquivos {mixture} do ano {year} deseja analisar? "))
+        except ValueError:
+            print("Entrada inválida. Insira um número inteiro.")
+            continue  
+
         
-        if not os.path.isfile(full_path):
-            print(f"Erro: Arquivo '{file_name}' não encontrado. Pulando...")
-        else:
-            csv_files.append(full_path)
-            base_name, ext = os.path.splitext(file_name)
-            csv_WP_files.append(os.path.join(data_folder, f"{base_name}_WP{ext}"))
+        for _ in range(num_files):
+            file_name = input(f"Digite o nome do arquivo {mixture} do ano {year} (ex: {mixture}_1.csv): ")
+            full_path = os.path.join(data_folder, file_name)
         
+            if not os.path.isfile(full_path):
+                print(f"Erro: Arquivo '{file_name}' não encontrado. Pulando...")
+            else:
+                csv_files[mixture].append(full_path)
+                base_name, ext = os.path.splitext(file_name)
+                csv_WP_files[mixture].append(os.path.join(data_folder, f"{base_name}_WP{ext}"))
+    
     return csv_files, csv_WP_files
 
 def create_eff_graph(df, index):
@@ -34,126 +39,128 @@ def create_eff_graph(df, index):
                            np.array(df['efficiency'].values, dtype=float),
                            ROOT.nullptr, 
                            np.array(df['eff_error'].values, dtype=float))
-    gr.SetMarkerStyle(markers[index % len(markers)])
-    gr.SetMarkerColor(colors[index % len(colors)])
-    gr.SetLineColor(colors[index % len(colors)])
+    gr.SetMarkerStyle(index % 10 + 20)
+    gr.SetMarkerColor(index + 1)
+    gr.SetLineColor(index + 1)
     return gr
 
 def fit_sigmoid(graph, df, index):
     sigmoid = ROOT.TF1(f"sigmoid_{index}", "[0]/(1+ TMath::Exp(-[1]*(x-[2])))", df['HV_top'].min(), df['HV_top'].max())
     sigmoid.SetParNames("Emax", "Lambda", "HV50")
     sigmoid.SetParameters(0.9, 0.01, 7000)
-    sigmoid.SetLineColor(colors[index % len(colors)])
+    sigmoid.SetLineColor(index + 1)
     graph.Fit(sigmoid, "R")
     return sigmoid
 
-def extract_fit_parameters(fits):
-    Emax, Lambda, HV50, HV95, WP = [], [], [], [], []
+def extract_fit_parameters(fits, HV_ref=9500):
+    params = []
     for sigmoid in fits:
-        Emax.append(sigmoid.GetParameter(0))
-        Lambda.append(sigmoid.GetParameter(1))
-        HV50.append(sigmoid.GetParameter(2))
-        HV95.append(sigmoid.GetX(HV_ref))
-        WP.append(HV50[-1] - math.log(1 / 0.95 - 1) / Lambda[-1] + 150.)
-    return Emax, Lambda, HV50, HV95, WP
+        Emax = sigmoid.GetParameter(0)
+        Lambda = sigmoid.GetParameter(1)
+        HV50 = sigmoid.GetParameter(2)
+        HV95 = sigmoid.GetX(HV_ref)
+        WP = HV50 - math.log(1 / 0.95 - 1) / Lambda + 150.
+        params.append({'Emax': Emax, 'Lambda': Lambda, 'HV50': HV50, 'HV95': HV95, 'WP': WP})
+    return params
 
-def process_files(csv_files, file_offset=0):
+def process_files(csv_files):
     graphs, fits = [], []
     for i, file in enumerate(csv_files):
         df = pd.read_csv(file)
-        gr = create_eff_graph(df, i + file_offset)
-        sigmoid = fit_sigmoid(gr, df, i + file_offset)
+        gr = create_eff_graph(df, i)
+        sigmoid = fit_sigmoid(gr, df, i)
         graphs.append(gr)
         fits.append(sigmoid)
-    return graphs, fits
+    return fits
 
+def extract_bkg_Emax(params, csv_WP_files):
+    Emax = {mixture: [p['Emax'] for p in param_list] for mixture, param_list in params.items()}
+    bkg = {mixture: [] for mixture in csv_WP_files.keys()}
+    
+    for mixture, files in csv_WP_files.items():
+        for file in files:
+            print(f"Lendo arquivo: {file}")  # Debug para ver o caminho
+            df = pd.read_csv(file)  # Tenta abrir o arquivo CSV
+            
+            noiseGammaRate = df['noiseGammaRate'][0]
+            print("valor do noiseGammaRate é:", noiseGammaRate)
+            
+            gamma_CS = df['gamma_CS'][0] * 1000
+            print("valor do gamma_CS é:", gamma_CS)
+            
+            bkg_value = noiseGammaRate / gamma_CS
+            bkg[mixture].append(bkg_value)  # Adiciona o valor calculado
+            
+    print(Emax, bkg)
 
-def extract_bkg(csv_WP_files):
-    bkg = []
-    for file in csv_WP_files:
-        df = pd.read_csv(file)
-        # Garantir que estamos acessando as colunas corretamente
-        if 'noiseGammaRate' in df.columns and 'gamma_CS' in df.columns:
-            # Calcular o valor de bkg
-            bkg_value = df['noiseGammaRate'] / (df['gamma_CS'] * 1000)
-            # Assumir que estamos interessados apenas em valores escalares, então pegar o primeiro valor
-            bkg.append(bkg_value.iloc[0])  # Acessar o primeiro valor
-        else:
-            print(f"Colunas 'noiseGammaRate' ou 'gamma_CS' não encontradas no arquivo {file}.")
-    return bkg
+    return Emax, bkg  
 
+def plot_bkg_vs_Emax(Emax_2024, Emax_2023, bkg_2024, bkg_2023):
+    # Criando gráficos de 2024
+    gr_2024_STDMX = ROOT.TGraph(len(bkg_2024['STDMX']), np.array(bkg_2024['STDMX'], dtype=float), np.array(Emax_2024['STDMX'], dtype=float))
+    gr_2024_30CO2 = ROOT.TGraph(len(bkg_2024['30CO2']), np.array(bkg_2024['30CO2'], dtype=float), np.array(Emax_2024['30CO2'], dtype=float))
+    gr_2024_30CO205SF6 = ROOT.TGraph(len(bkg_2024['30CO205SF6']), np.array(bkg_2024['30CO205SF6'], dtype=float), np.array(Emax_2024['30CO205SF6'], dtype=float))
+    gr_2024_40CO2 = ROOT.TGraph(len(bkg_2024['40CO2']), np.array(bkg_2024['40CO2'], dtype=float), np.array(Emax_2024['40CO2'], dtype=float))
 
+    # Configurando estilo
+    for gr, color, marker in zip([gr_2024_STDMX, gr_2024_30CO2, gr_2024_30CO205SF6, gr_2024_40CO2],
+                                  [ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kGreen+2],
+                                  [20, 21, 22, 23]):
+        gr.SetMarkerStyle(marker)
+        gr.SetMarkerColor(color)
+        gr.SetMarkerSize(1.2)
+    
+    # Criando gráficos de 2023
+    gr_2023_STDMX = ROOT.TGraph(len(bkg_2023['STDMX']), np.array(bkg_2023['STDMX'], dtype=float), np.array(Emax_2023['STDMX'], dtype=float))
+    gr_2023_30CO2 = ROOT.TGraph(len(bkg_2023['30CO2']), np.array(bkg_2023['30CO2'], dtype=float), np.array(Emax_2023['30CO2'], dtype=float))
+    gr_2023_30CO205SF6 = ROOT.TGraph(len(bkg_2023['30CO205SF6']), np.array(bkg_2023['30CO205SF6'], dtype=float), np.array(Emax_2023['30CO205SF6'], dtype=float))
+    gr_2023_40CO2 = ROOT.TGraph(len(bkg_2023['40CO2']), np.array(bkg_2023['40CO2'], dtype=float), np.array(Emax_2023['40CO2'], dtype=float))
+    
+    # Configurando estilo
+    for gr, color, marker in zip([gr_2023_STDMX, gr_2023_30CO2, gr_2023_30CO205SF6, gr_2023_40CO2],
+                                  [ROOT.kBlack, ROOT.kRed, ROOT.kBlue, ROOT.kGreen+2],
+                                  [24, 25, 26, 32]):
+        gr.SetMarkerStyle(marker)
+        gr.SetMarkerColor(color)
+        gr.SetMarkerSize(1.2)
+    
+    # Criando o Canvas
+    c1 = ROOT.TCanvas("c1", "Emax vs Bkg", 800, 600)
+    c1.SetGrid()
+    gr_2024_STDMX.Draw("AP")
+    gr_2024_30CO2.Draw("P SAME")
+    gr_2024_30CO205SF6.Draw("P SAME")
+    gr_2024_40CO2.Draw("P SAME")
+    
+    gr_2023_STDMX.Draw("P SAME")
+    gr_2023_30CO2.Draw("P SAME")
+    gr_2023_30CO205SF6.Draw("P SAME")
+    gr_2023_40CO2.Draw("P SAME")
+    
+    c1.SaveAs("Emax_vs_Bkg_2024_vs_2023.png")
 
-def create_bkg_graph(Emax_2024, Emax_2023, bkg_2024, bkg_2023):
-    gr_2024 = ROOT.TGraph(len(Emax_2024))
-    gr_2023 = ROOT.TGraph(len(Emax_2023))
-
-    # Garantir que os dados sejam arrays numpy de tipo float
-    Emax_2024 = np.array(Emax_2024, dtype=float)
-    Emax_2023 = np.array(Emax_2023, dtype=float)
-    bkg_2024 = np.array(bkg_2024, dtype=float)
-    bkg_2023 = np.array(bkg_2023, dtype=float)
-
-    print(Emax_2024, Emax_2023, bkg_2024, bkg_2023)
-
-    for i in range(len(bkg_2024)):
-        x = float(bkg_2024[i])  
-        y = float(Emax_2024[i])  
-        gr_2024.SetPoint(i, x, y)  
-
-    for i in range(len(bkg_2023)):
-        x = float(bkg_2023[i])  
-        y = float(Emax_2023[i])  
-        gr_2023.SetPoint(i, x, y) 
-
-    return gr_2024, gr_2023
-
-
-
-def plot_results(gr_2024, gr_2023):
-    c2 = ROOT.TCanvas("c2", "Emax vs ABS", 800, 600)
-
-    gr_2024.SetMarkerStyle(21)
-    gr_2024.SetMarkerColor(ROOT.kBlue)
-    gr_2024.GetXaxis().SetTitle("ABS")
-    gr_2024.GetYaxis().SetTitle("Efficiency")
-
-    gr_2023.SetMarkerStyle(22)
-    gr_2023.SetMarkerColor(ROOT.kRed)
-
-    gr_2024.GetXaxis().SetRangeUser(0, 2.5)
-    gr_2023.GetXaxis().SetRangeUser(0, 2.5)
-    gr_2024.GetYaxis().SetRangeUser(0.88, 1)
-    gr_2023.GetYaxis().SetLimits(0.88, 1)
-
-    gr_2024.Draw("AP")
-    gr_2023.Draw("P same")
-
-    legend = ROOT.TLegend(0.7, 0.2, 0.9, 0.3)
-    legend.AddEntry(gr_2024, "2024", "p")
-    legend.AddEntry(gr_2023, "2023", "p")
-    legend.Draw()
-
-    c2.Draw()
-    c2.SaveAs("bkg_vs_EFF.png")
 
 def main():
-    data_folder_1 = "data_2024"
-    data_folder_2 = "data_2023" 
+    data_folder_2024 = "data_2024"
+    data_folder_2023 = "data_2023"
     
-    csv_files_2024, csv_WP_files_2024 = get_files(data_folder_1, 2024)
-    csv_files_2023, csv_WP_files_2023 = get_files(data_folder_2, 2023)
-    
-    graphs_2024, fits_2024 = process_files(csv_files_2024)    
-    graphs_2023, fits_2023 = process_files(csv_files_2023, file_offset=len(csv_files_2024))
-    
-    Emax_2024, _, _, _, _ = extract_fit_parameters(fits_2024)
-    Emax_2023, _, _, _, _ = extract_fit_parameters(fits_2023)
-    bkg_2024, bkg_2023 = extract_bkg(csv_WP_files_2024), extract_bkg(csv_WP_files_2023)
-    gr_2024, gr_2023 = create_bkg_graph(Emax_2024, Emax_2023, bkg_2024, bkg_2023)
-    plot_results(gr_2024, gr_2023)
+    csv_files_2024, csv_WP_files_2024 = get_files(data_folder_2024, 2024)
+    csv_files_2023, csv_WP_files_2023 = get_files(data_folder_2023, 2023)
 
-    print("Processamento concluído.")
+    params_2024, params_2023 = {}, {}
+    
+    for mixture, files in csv_files_2024.items():
+        fits = process_files(files)
+        params_2024[mixture] = extract_fit_parameters(fits)
 
+    for mixture, files in csv_files_2023.items():
+        fits = process_files(files)
+        params_2023[mixture] = extract_fit_parameters(fits)
+    
+    Emax_2024, bkg_2024 = extract_bkg_Emax(params_2024, csv_WP_files_2024)
+    Emax_2023, bkg_2023 = extract_bkg_Emax(params_2023, csv_WP_files_2023)
+    
+    plot_bkg_vs_Emax(Emax_2024, Emax_2023, bkg_2024, bkg_2023)
+    
 if __name__ == "__main__":
     main()
