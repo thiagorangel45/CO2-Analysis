@@ -7,28 +7,24 @@ import math
 markers = [20, 21, 22, 23, 24]  
 colors = [ROOT.kBlue, ROOT.kRed, ROOT.kGreen+2, ROOT.kMagenta, ROOT.kOrange+7]
 
-def get_files(data_folder, year):
+def get_files(data_folder):
     mixtures = ['STDMX', '30CO2', '30CO205SF6', '40CO2']
-    csv_files = {mixture: [] for mixture in mixtures}
     
-    for mixture in mixtures:
-        try:
-            num_files = int(input(f"Quantos arquivos {mixture} do ano {year} deseja analisar? "))
-        except ValueError:
-            print("Entrada inválida. Insira um número inteiro.")
-            continue  
+    num_files = {
+        "STDMX": ["STDMX_OFF.csv", "STDMX_22.csv", "STDMX_10.csv", "STDMX_6.9.csv", "STDMX_3.3.csv", "STDMX_2.2.csv", "STDMX_1.csv"],
+        "30CO2": ["30CO2_OFF.csv", "30CO2_22.csv", "30CO2_10.csv", "30CO2_6.9.csv", "30CO2_3.3.csv", "30CO2_2.2.csv", "30CO2_1.csv"],
+        "30CO205SF6": ["30CO205SF6_OFF.csv", "30CO205SF6_22.csv", "30CO205SF6_10.csv", "30CO205SF6_6.9.csv", "30CO205SF6_3.3.csv", "30CO205SF6_2.2.csv", "30CO205SF6_1.csv"],
+        "40CO2": ["40CO2_OFF.csv", "40CO2_22.csv", "40CO2_10.csv", "40CO2_6.9.csv", "40CO2_3.3.csv"]
+    }
+    
+    csv_files_2024 = {mixture: [] for mixture in mixtures}
 
-        
-        for _ in range(num_files):
-            file_name = input(f"Digite o nome do arquivo {mixture} do ano {year} (ex: {mixture}_1.csv): ")
+    for mixture in mixtures:
+        for file_name in num_files[mixture]:
             full_path = os.path.join(data_folder, file_name)
-        
-            if not os.path.isfile(full_path):
-                print(f"Erro: Arquivo '{file_name}' não encontrado. Pulando...")
-            else:
-                csv_files[mixture].append(full_path)
+            csv_files_2024[mixture].append(full_path)
     
-    return csv_files
+    return csv_files_2024
 
 def create_eff_graph(df, index):
     gr = ROOT.TGraphErrors(len(df),
@@ -79,7 +75,8 @@ def extract_ABS_Emax(params, csv_files):
                 value = file.split("/")[-1].split("_", 1)[1].replace(".csv", "")
                 ABS[mixture].append(25 if value == "OFF" else float(value))
             except (IndexError, ValueError):
-                ABS[mixture].append(0)  
+                ABS[mixture].append(0)
+    print(Emax, ABS)
     return Emax, ABS
 
 def plot_ABS_vs_Emax(Emax_2024, Emax_2023, ABS_2024, ABS_2023):
@@ -150,8 +147,8 @@ def main():
     data_folder_2024 = "data_2024"
     data_folder_2023 = "data_2023"
     
-    csv_files_2024 = get_files(data_folder_2024, 2024)
-    csv_files_2023 = get_files(data_folder_2023, 2023)
+    csv_files_2024 = get_files(data_folder_2024)
+    csv_files_2023 = get_files(data_folder_2023)
 
     params_2024, params_2023 = {}, {}
     
