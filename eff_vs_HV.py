@@ -105,7 +105,7 @@ def plot_legends(csv_WP_files, graphs, fits, Emax, WP):
             
             legend.AddEntry(graphs[i], eff_text, "p")
 
-    return legend  
+    return legend, txt  
 
 
 def plot_heads():
@@ -128,9 +128,10 @@ def plot_heads():
     cms_tex_2.DrawLatex(0.32, 0.905, "Preliminary")
 
 
-def plot_results(graphs, fits, legend):
+def plot_results(graphs, fits, legend, csv_WP_files, txt):
     """ Cria e exibe o gráfico final """
     c1 = ROOT.TCanvas("c1", "Efficiency vs HV_top with Fits", 630, 600)
+    mixture = [item.split("/")[-1].split("_")[0] for item in csv_WP_files]
     mg = ROOT.TMultiGraph()
     for gr in graphs:
         mg.Add(gr)
@@ -141,11 +142,40 @@ def plot_results(graphs, fits, legend):
     mg.GetYaxis().SetTitle("Efficiency")
     mg.Draw("AP")
 
-    line = ROOT.TLine(6250, 1., 7400, 1.)
-    line.SetLineColor(1)
-    line.SetLineStyle(9)
-    line.SetLineWidth(2)
-    line.Draw()
+    if all(p == mixture[0] for p in mixture):
+        
+        line = ROOT.TLine(6250, 1., 7400, 1.)
+        line.SetLineColor(1)
+        line.SetLineStyle(9)
+        line.SetLineWidth(2)
+        line.Draw()
+
+        ltx_data = ROOT.TLatex()
+        ltx_data.SetTextFont(42)
+        ltx_data.SetTextSize(0.025)
+        ltx_data.SetTextColor(1)
+        ltx_data.DrawLatex(6300, 0.88, "Standard gas mixture")
+        ltx_data.DrawLatex(6300, 0.81, "Test Beam in April 2024")
+        ltx_data.DrawLatex(6300, 0.74, "After irradiation")
+        ltx_data.DrawLatex(6300, 0.67, "1.4 mm double gap RPC")
+        ltx_data.DrawLatex(6300, 0.60, "Threshold = 60 [fC]")
+    
+    else:
+        line = ROOT.TLine(6000, 1., 7400, 1.)
+        line.SetLineColor(1)
+        line.SetLineStyle(9)
+        line.SetLineWidth(2)
+        line.Draw()
+
+        ltx_data = ROOT.TLatex()
+        ltx_data.SetTextFont(42)
+        ltx_data.SetTextSize(0.025)
+        ltx_data.SetTextColor(1)
+        ltx_data.DrawLatex(6100, 0.88, f"background rate = {txt:.1f} kHz/cm^{{2}}")
+        ltx_data.DrawLatex(6100, 0.81, "Test Beam in April 2024")
+        ltx_data.DrawLatex(6100, 0.74, "After irradiation")
+        ltx_data.DrawLatex(6100, 0.67, "1.4 mm double gap RPC")
+        ltx_data.DrawLatex(6100, 0.60, "Threshold = 60 [fC]")
 
     legend.Draw()
     plot_heads() 
@@ -169,9 +199,9 @@ def main():
         fits.append(fit_sigmoid(gr, df, i))
     
     Emax, Lambda, HV50, HV95, WP = extract_fit_parameters(fits)
-    legend = plot_legends(csv_WP_files, graphs, fits, Emax, WP)   
+    legend, txt = plot_legends(csv_WP_files, graphs, fits, Emax, WP)   
     plot_heads()
-    plot_results(graphs, fits, legend)
+    plot_results(graphs, fits, legend, csv_WP_files, txt)
     
 if __name__ == "__main__":
     main()
