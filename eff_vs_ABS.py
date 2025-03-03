@@ -127,10 +127,18 @@ def plot_ABS_vs_Emax(Emax_2024, Emax_2023, ABS_2024, ABS_2023):
     gr_2023_40CO2.SetMarkerStyle(32)
     gr_2023_40CO2.SetMarkerColor(ROOT.kGreen+2)
     gr_2023_40CO2.SetMarkerSize(1.2)
+
+    graphs = [gr_2024_STDMX, gr_2024_30CO2, gr_2024_30CO205SF6, gr_2024_40CO2, gr_2023_STDMX, gr_2023_30CO2, gr_2023_30CO205SF6, gr_2023_40CO2]
     
     # Criando o Canvas
-    c1 = ROOT.TCanvas("c1", "Emax vs ABS", 800, 600)
-    c1.SetGrid()
+    c1 = ROOT.TCanvas("c1", "Emax vs ABS", 700, 600)    
+    mg = ROOT.TMultiGraph()
+    for gr in graphs:
+        mg.Add(gr)
+
+    mg.GetYaxis().SetRangeUser(0.8, 1.08)
+    mg.Draw("AP")
+    '''
     gr_2024_STDMX.Draw("AP")
     gr_2024_30CO2.Draw("P SAME")
     gr_2024_30CO205SF6.Draw("P SAME")
@@ -140,6 +148,24 @@ def plot_ABS_vs_Emax(Emax_2024, Emax_2023, ABS_2024, ABS_2023):
     gr_2023_30CO2.Draw("P SAME")
     gr_2023_30CO205SF6.Draw("P SAME")
     gr_2023_40CO2.Draw("P SAME")
+    '''
+    
+    legend = ROOT.TLegend(0.13, 0.68, 0.25, 0.89)
+    legend.AddEntry(gr_2023_STDMX, "95.2% C_{2}H_{2}F_{4} + 4.5% iC_{4}H_{10} + 0.3% SF_{6}", "p")  
+    legend.AddEntry(gr_2023_30CO2, "64% C_{2}H_{2}F_{4} + 30% CO_{2} + 5% iC_{4}H_{10} + 1% SF_{6}", "p")  
+    legend.AddEntry(gr_2023_30CO205SF6, "64.5% C_{2}H_{2}F_{4} + 30% CO_{2} + 5% iC_{4}H_{10} + 0.5% SF_{6}", "p")  
+    legend.AddEntry(gr_2023_40CO2, "54% C_{2}H_{2}F_{4} + 40% CO_{2} + 5% iC_{4}H_{10} + 1% SF_{6}", "p")  
+    
+    legend.SetBorderSize(0)  # Remove a borda da legenda
+    legend.SetFillStyle(0)   # Remove o fundo da legenda para transparência
+    legend.SetTextSize(0.03) # Ajusta o tamanho do texto
+    legend.Draw("P SAME")
+
+    line = ROOT.TLine(0.1, 1., 26, 1.)
+    line.SetLineColor(1)
+    line.SetLineStyle(9)
+    line.SetLineWidth(2)
+    line.Draw("P SAME")
     
     c1.SaveAs("Emax_vs_ABS_2024_vs_2023.png")
     
